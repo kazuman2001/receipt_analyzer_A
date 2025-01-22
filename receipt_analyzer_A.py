@@ -37,6 +37,7 @@ import shutil
 import pypdf
 import pandas as pd
 import ctypes
+import re
 
 
 def extract_text_from_pdf(pdf_path):
@@ -65,6 +66,10 @@ def initialize_data_structure():
         '請求先': [],
         '配送先': [],
         'モール名': [],
+        'ギフトカード利用枚数': [],
+        'ギフトカード利用合計金額': [],
+        'クレジットカード名': [],
+        'クレジットカード利用金額': [],
         'リネーム前ファイル名': [],
         'リネーム後ファイル名': [],
         '領収証内情報': []
@@ -118,7 +123,7 @@ def extract_billing_date(text):
 def extract_total_price(text):
     # "ご請求⾦額: 219,800 円\n"から"219800"（例）を抽出
     if 'ご請求金額:' in text and '円' in text:
-        total_price = text.split('ご請求金額:')[1].split('円')[0]
+        total_price = text.split('ご請求金額:')[1].split('円')[0].replace(',', '')
     else:
         total_price = 'ERROR'
 
@@ -144,7 +149,40 @@ def extract_shipping_name(text):
 
     return shipping_name
 
+
+def extract_giftcard_payment(text):
+    # ギフトカードの金額を抽出する正規表現
+    if 'ギフトカード' in text:
+        giftcard_payment = 0
+        giftcard_payment_count = 0
+        text = text.replace('\n', '')
+        pattern = r'ギフトカード.*?(\d{1,3}(,\d{3})*)円を請求'
+        matches = re.findall(pattern, text)
+
+        giftcard_payment_count = len(matches)
+        giftcard_payment = sum(int(match[0].replace(',', '')) for match in matches)
+    else:
+        giftcard_payment = 'ERROR'
+        giftcard_payment_count = 'ERROR'
+
+    return giftcard_payment_count, giftcard_payment
+
+
+def extract_creditcard_payment(text):
+    # "ギフトカード"表記のない"クレジットカード"の種別を抽出
+    if 'クレジットカード' in text:
+        pattern = r"クレジットカード(?!ギフトカード)([^\s]+xxxx\d{4}).*?([0-9,]+円)"
+        matches = re.findall(pattern, text, re.DOTALL)
+        for match in matches:
+            creditscard_name = match[0]
+            creditscard_payment = match[1].replace(',', '').replace('円', '')
+    else:
+        creditscard_name = 'ERROR'
+        creditscard_payment = 'ERROR'
+    
+    return creditscard_name, creditscard_payment
       
+
 def parse_pdf_text(text):
     isError = False
     
@@ -184,6 +222,16 @@ def parse_pdf_text(text):
         
     # モール名をCSVに保存
     data['モール名'].append('AppleJapan合同会社')
+    
+    # ギフトカードの利用枚数と合計金額を抽出
+    giftcard_payment_count, giftcard_payment = extract_giftcard_payment(receipt_text)
+    data['ギフトカード利用枚数'].append(giftcard_payment_count)
+    data['ギフトカード利用合計金額'].append(giftcard_payment)
+       
+    # クレジットカードの利用額と名前を抽出
+    creditcard_name, creditcard_payment = extract_creditcard_payment(receipt_text)
+    data['クレジットカード名'].append(creditcard_name)
+    data['クレジットカード利用金額'].append(creditcard_payment)
     
     isError = False
     if all(value == "ERROR" for value in (order_number, billing_number, purchase_date, billing_date, total_price, billing_name, shipping_name)):
