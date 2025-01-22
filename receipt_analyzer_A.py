@@ -18,6 +18,10 @@ CSVに保存するデータ：
 - 請求先
 - 配送先
 - モール名
+- ギフトカード利用枚数
+- ギフトカード利用合計金額
+- クレジットカード名
+- クレジットカード利用金額
 - リネーム前ファイル名
 - リネーム後ファイル名
 - 領収証内情報
@@ -162,25 +166,29 @@ def extract_giftcard_payment(text):
         giftcard_payment_count = len(matches)
         giftcard_payment = sum(int(match[0].replace(',', '')) for match in matches)
     else:
-        giftcard_payment = 'ERROR'
-        giftcard_payment_count = 'ERROR'
+        giftcard_payment = 0
+        giftcard_payment_count = 0
 
     return giftcard_payment_count, giftcard_payment
 
 
 def extract_creditcard_payment(text):
     # "ギフトカード"表記のない"クレジットカード"の種別を抽出
-    if 'クレジットカード' in text:
-        pattern = r"クレジットカード(?!ギフトカード)([^\s]+xxxx\d{4}).*?([0-9,]+円)"
-        matches = re.findall(pattern, text, re.DOTALL)
-        for match in matches:
-            creditscard_name = match[0]
-            creditscard_payment = match[1].replace(',', '').replace('円', '')
-    else:
-        creditscard_name = 'ERROR'
-        creditscard_payment = 'ERROR'
+    pattern = r"クレジットカード(?!ギフトカード)([^\s]+xxxx\d{4}).*?([0-9,]+円)"
+    matches = re.findall(pattern, text, re.DOTALL)
     
-    return creditscard_name, creditscard_payment
+    creditcard_name = ""
+    creditcard_payment = 0
+    
+    if matches:
+        for match in matches:
+            creditcard_name = match[0]
+            creditcard_payment = int(match[1].replace(',', '').replace('円', ''))
+    else:
+        creditcard_name = "クレジットカード情報なし"
+        creditcard_payment = 0
+    
+    return creditcard_name, creditcard_payment
       
 
 def parse_pdf_text(text):
@@ -314,7 +322,7 @@ def main():
         if isError:
             # ERROR情報を順次追加
             pdf_text_with_error += pdf_file + '\n' + text + '\n\n'
-        data['リネーム前ファイル名'].append(pdf_file)   # リネーム前ファイル名をCSVに保存
+        data['リネーム前ファイル名'].append(os.path.basename(pdf_file)) # リネーム前ファイル名をCSVに保存
         new_pdf_file = generate_new_pdf_file_name(data) # リネーム後ファイル名を生成
         data['リネーム後ファイル名'].append(new_pdf_file)   # リネーム後ファイル名をCSVに保存
         
